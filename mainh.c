@@ -5,7 +5,7 @@
 #include <dirent.h>
 #include <time.h>
 #include <math.h>
-#define FILE_NUMBER 2//default 52
+#define FILE_NUMBER 4//default 52
 #define TEST_FILE_NUMBER 1
 #include <limits.h> 
 
@@ -59,7 +59,7 @@ int num_col(char* line)
 }
 
 /* Gets the numbers of rows (total) and columns of all files in the "path" directory */
-int* getNumbRowsColumns(char *path, char **csvs){
+void getNumbRowsColumns(char *path, char **csvs,int *numRowsColumns,int file_number){
     char temp_path[100];// this is just a helper path
     strcpy(temp_path,path);
 
@@ -71,14 +71,13 @@ int* getNumbRowsColumns(char *path, char **csvs){
     if (dr == NULL)  // opendir returns NULL if couldn't open directory 
     { 
         printf("Could not open current directory" ); 
-        return 0; 
     } 
   
     // Refer http://pubs.opengroup.org/onlinepubs/7990989775/xsh/readdir.html 
     // for readdir() 
     while ((de = readdir(dr)) != NULL)
     {
-        //printf("%s\n",de->d_name );
+        // printf("%s\n",de->d_name );
         if (EndsWithCsv(de->d_name)==0)
         {
             strcpy(csvs[csv], de->d_name);
@@ -101,10 +100,10 @@ int* getNumbRowsColumns(char *path, char **csvs){
     //##############the first opening of all the csvs is to get the sizes of columns and rows############################
 
 
-    for (int i = 0; i < FILE_NUMBER; ++i)//52 are the csvs couldn't make it more generic
+    for (int i = 0; i < file_number; ++i)//52 are the csvs couldn't make it more generic
     {
         strcat(temp_path,csvs[i]); //copies the file to path, in order to read csv later
-        //fp = freopen(temp_path, "r",fp);
+        // fp = freopen(temp_path, "r",fp);
         fp=fopen(temp_path,"r");
         //printf("%s\n",temp_path );
         strcpy(temp_path,path);
@@ -125,11 +124,9 @@ int* getNumbRowsColumns(char *path, char **csvs){
         
     }
 
-    int* numRowsColumns = malloc(2*sizeof(int));
     numRowsColumns[0] = TOTAL_NUM_ROW;
     numRowsColumns[1] = col_num;
 
-    return numRowsColumns;
 }
 
 void getrow(char* line,char feature_names[][50])
@@ -165,21 +162,21 @@ void fix_id(char *array)
     }
 }
 
-void get_data(char* path, int col_num, char **csvs, float** data)
+void get_data(char* path, int col_num, char **csvs, float** data,int file_number)
 {
     char temp_path[100];
     strcpy(temp_path,path);
     FILE *fp; //for WINDOWS
-    //FILE *fp = fopen(temp_path, "r"); // FOR LINUX 
+    // FILE *fp = fopen(temp_path, "r"); // FOR LINUX 
     char buf[3072]; // this is a buffer that contains the line from fgets
     int k=0;
     char line[col_num][50];       //initialize line, it should have same length as feature names [col_name][50], 50 is just a string size number
     char col_names[col_num][50];  
-    for (int i = 0; i < FILE_NUMBER; ++i)
+    for (int i = 0; i < file_number; ++i)
     {
         /* itearate through csvs */
         strcat(temp_path,csvs[i]); //add file to path
-        //freopen(temp_path, "r",fp); //LINUX
+        // freopen(temp_path, "r",fp); //LINUX
         fp=fopen(temp_path,"r"); //WINDOWS
         strcpy(temp_path,path); //restore absolute path
         
@@ -616,8 +613,8 @@ int main(void)
 {
 
     // char path[100]="D:/Work/PhD/HartreeTraining/Hartree Assignment/data/";// this path should be the folder of data
-    // char path[100]="/home/konsa/Downloads/hartree_data/";
-    char path[100]="C:\\Users\\theot\\eclipse-workspaceC\\VSC\\Hartree\\Hartree_Data\\";
+    char path[100]="/home/konsa/Downloads/hartree_data/sample/";
+    // char path[100]="C:\\Users\\theot\\eclipse-workspaceC\\VSC\\Hartree\\Hartree_Data\\";
     int* num_rows_columns = malloc(2*sizeof(int)); //holds number of rows and columns
     
     char **csvs = malloc(FILE_NUMBER * sizeof(char *));
@@ -625,7 +622,7 @@ int main(void)
         csvs[i] = malloc((50)*sizeof(float));
 
     //Go trough all files to check how many rows and columns of data we'll need to allocate
-    num_rows_columns = getNumbRowsColumns(path, csvs);
+    getNumbRowsColumns(path, csvs,num_rows_columns,FILE_NUMBER);
     int total_num_rows = num_rows_columns[0];
     int num_columns = num_rows_columns[1];
 
@@ -646,7 +643,7 @@ int main(void)
 
     float *target_y=malloc(TOTAL_NUM_ROW*sizeof(float));
 
-    get_data(path, num_columns, csvs, train_data);
+    get_data(path, num_columns, csvs, train_data,FILE_NUMBER);
     
  //printMatr(TOTAL_NUM_ROW,col_num,data);
 
@@ -655,8 +652,8 @@ int main(void)
     //########################     Some Initialisation    ###############################################
     int target_feature = 193; //Target feautr is the population in 193th col
     int tree_size=round(sqrt(num_columns))+1; // The number of feature that the root of each tree gets
-    int num_of_trees=5;  //The number of trees
-    int depth = 4;
+    int num_of_trees=50;  //The number of trees
+    int depth = 6;
     int no_Of_nodes = (int)pow(2,depth)-1;
     struct Stack* node_stack=createStack(no_Of_nodes);
     struct Stack* level_stuck=createStack(no_Of_nodes);
@@ -670,7 +667,14 @@ int main(void)
     int right_node=0;
     int parent_size=0;
     float **temp_child_data;
+    float avgTarget=0;
+    // int **bofArrays = malloc(num_of_trees * sizeof(int *));
     int **bofArrays = malloc(num_of_trees * sizeof(int *));
+    for (int i = 0; i < num_of_trees; ++i)
+    {
+        /* code */
+        bofArrays[i]=malloc(tree_size*sizeof(int));
+    }
     int bofArray[tree_size];
     int minimum_leaf_size=16;
     int left_child_size_flag=1;
@@ -748,15 +752,19 @@ int main(void)
     for (int i = 0; i < num_of_trees; ++i)
     {   
         fillBof(TOTAL_NUM_ROW,num_columns,tree_size,train_data,forest[i][root],bofArray,target_feature,i+3);
-        bofArrays[i] = bofArray;
+        for (int j = 0; j < tree_size; ++j)
+        {
+            bofArrays[i][j] = bofArray[j];
+        }
     }
+    printMatr(num_of_trees,tree_size,bofArrays);
     // feat_thres is a 3-d matrix [num_of_tress][num_of_nodes][best_feature,float threshold]
     float ***feat_thres = malloc(num_of_trees * sizeof(float **));
     for (int j = 0; j < num_of_trees; ++j)
     {
         feat_thres[j]=malloc(no_Of_nodes * sizeof(float *));
         for (int i=0; i < no_Of_nodes; i++)
-            feat_thres[j][i] = malloc((2)*sizeof(float));
+            feat_thres[j][i] = malloc((3)*sizeof(float));
     }
 
     // printMatrF(TOTAL_NUM_ROW,tree_size,forest[9][root]);
@@ -778,44 +786,36 @@ int main(void)
         while(!isEmpty(node_stack))
         {
             current_root=pop(node_stack);//3
+            splitable=1;
             printf("current root = %d ", current_root);
             parent_size=pop(rt_size);
-            printf(" Current parent size = %d \n", parent_size);
+            printf(" Current parent size = %d", parent_size);
             level=pop(level_stuck);
-
+            printf(" Current level = %d ", level);
             update_utility_matrix(utilities_matrix[fi],parent_size);//
             
-
             // get_best_descriptor(utilities_matrix[fi], forest[fi][current_root]);
-            get_best_threshold(utilities_matrix[fi], forest[fi][current_root]);
+            // get_best_threshold(utilities_matrix[fi], forest[fi][current_root]);
 
-            
-            get_split_childsizes(utilities_matrix[fi],forest[fi][current_root]);
+            // get_split_childsizes(utilities_matrix[fi],forest[fi][current_root]);
 
             // utilities_matrix[fi][5]=33;
-            num_rows = utilities_matrix[fi][0];//(total) number of rows
-
             
 
-            printf("left size is: %d", utilities_matrix[fi][4]);
-            printf("  right size is: %d\n", utilities_matrix[fi][5]);
+            // printf("left size is: %d", utilities_matrix[fi][4]);
+            // printf("  right size is: %d\n", utilities_matrix[fi][5]);
            
             // printf("%f\n",forest[fi][current_root][utilities_matrix[fi][3]][utilities_matrix[fi][2]] );
 
             left_child_size_flag=0;
             right_child_size_flag=0;
 
-            feat_thres[fi][current_root][0]=forest[fi][current_root][utilities_matrix[fi][3]][utilities_matrix[fi][2]];
-            printf("the numeric threshold is %f\n",feat_thres[fi][current_root][0]);
-            feat_thres[fi][current_root][1]= bofArrays[fi][utilities_matrix[fi][3]];
-            printAr1(utilities_matrix[fi],6);
+            // feat_thres[fi][current_root][0]=forest[fi][current_root][utilities_matrix[fi][3]][utilities_matrix[fi][2]];
+            // printf("the numeric threshold is %f\n",feat_thres[fi][current_root][0]);
+            // feat_thres[fi][current_root][1]=utilities_matrix[fi][2];
+            // printAr1(utilities_matrix[fi],6);
             // printAr1(utilities_matrix[fi],6);
 
-
-            // printMatr(num_of_trees,6,utilities_matrix);
-            
-            // printMatr(num_of_trees,4,utilities_matrix);
-            // printMatrF(parent_size,tree_size,forest[fi][current_root]);
 
                 //todo get numeric threshold
             if(parent_size<minimum_leaf_size)
@@ -823,28 +823,31 @@ int main(void)
                 splitable=0;
                 printf("the number of elems is:%d\n",parent_size );
             }
-            if(current_root%2!=0 &&splitable) // if splitable 
+            if( (level)<depth &&splitable) // if splitable 
             {
+                get_best_threshold(utilities_matrix[fi], forest[fi][current_root]);
+                get_split_childsizes(utilities_matrix[fi],forest[fi][current_root]);
+                printf("left size is: %d", utilities_matrix[fi][4]);
+                printf("  right size is: %d\n", utilities_matrix[fi][5]);
+
+                feat_thres[fi][current_root][0]=forest[fi][current_root][utilities_matrix[fi][3]][utilities_matrix[fi][2]];
+                printf("the numeric threshold is %f\n",feat_thres[fi][current_root][0]);
+                feat_thres[fi][current_root][1]=utilities_matrix[fi][2];
+                printAr1(utilities_matrix[fi],6);
+
                 left_node=current_root-(int)pow(2,depth-level-1);//1,0
                 right_node=current_root+(int)pow(2,depth-level-1);//5,2
 
-                if ((level+1)<depth)
-                {
-                    if(utilities_matrix[fi][5]>minimum_leaf_size)
-                    {
-                        printf("pushed right\n");
-                        push(rt_size,utilities_matrix[fi][5]);//right node
-                        push(node_stack,right_node);//11
-                        push(level_stuck,level+1);//1+1=2
-                    }
-                    if(utilities_matrix[fi][4]>minimum_leaf_size)
-                    {   
-                        printf("pushed left\n");
-                        push(rt_size,utilities_matrix[fi][4]);//left node 32
-                        push(node_stack,left_node);//3,11
-                        push(level_stuck,level+1);//1+1=2
-                    }
-                }
+                printf("pushed right\n");
+                push(rt_size,utilities_matrix[fi][5]);//right node
+                push(node_stack,right_node);//11
+                push(level_stuck,level+1);//1+1=2
+
+                printf("pushed left\n");
+                push(rt_size,utilities_matrix[fi][4]);//left node 32
+                push(node_stack,left_node);//3,11
+                push(level_stuck,level+1);//1+1=2
+
                 if (utilities_matrix[fi][4]>0)
                 {
                     /* code */
@@ -883,29 +886,50 @@ int main(void)
                     forest[fi][right_node]=forest[fi][current_root];
                 }
             }
-
-            if(current_root%2==0 || !splitable){
-                feat_thres[fi][current_root][2] == 1; //can either associate the leaf flag to the threshold value
+            else
+            {
+                feat_thres[fi][current_root][2]=1.0;
+                for (int avg_counter=0;avg_counter<utilities_matrix[fi][0];avg_counter++)
+                {
+                    avgTarget=avgTarget+forest[fi][current_root][avg_counter][utilities_matrix[fi][1]-1];//target column
+                }
+                feat_thres[fi][current_root][0]=avgTarget/utilities_matrix[fi][0];
+                avgTarget=0;
             }
-
         }
 
     }
-    //printMatr(num_of_trees,6,utilities_matrix);
+    //############INFERENCE####################################
+    // printMatrF(no_Of_nodes,3,feat_thres[0]);
 
-    // path[100]="/home/konsa/Downloads/hartree_data/test_sample/";
-    char path2[100] = "C:\\Users\\theot\\eclipse-workspaceC\\VSC\\Hartree\\Hartree_Test\\";
+    strcpy(path,"/home/konsa/Downloads/hartree_data/test_sample/");
+    // char path2[100] = "C:\\Users\\theot\\eclipse-workspaceC\\VSC\\Hartree\\Hartree_Test\\";
 
     char **test_csvs = malloc(TEST_FILE_NUMBER * sizeof(char *));
     for (int i=0; i < TEST_FILE_NUMBER; i++)
-        test_csvs[i] = malloc((50) *sizeof(float));
+        test_csvs[i] = malloc((50) *sizeof(char));
 
     //Go trough all files to check how many rows and columns of data we'll need to allocate
-    num_rows_columns = getNumbRowsColumns(path2, test_csvs);
+    printf("hello\n");
+
+    // free(target_y);
+    // free(train_data);
+    // free(forest);
+    // free(utilities_matrix);
+
+    // free(roots_temp);
+    // free(bofArray);
+    // free(bofArrays);
+    // free(temp_child_data);
+    // free(csvs);
+
+
+
+    getNumbRowsColumns(path, test_csvs,num_rows_columns,TEST_FILE_NUMBER);
     total_num_rows = num_rows_columns[0];
     num_columns = num_rows_columns[1];
 
-    // ############################### READING THE DATA FROM CSV FILES ###########################################
+    // // ############################### READING THE DATA FROM CSV FILES ###########################################
 
 
     TOTAL_NUM_ROW=total_num_rows-1;
@@ -922,7 +946,7 @@ int main(void)
 
 
 
-    get_data(path, num_columns, test_csvs, test_data);
+    get_data(path, num_columns, test_csvs, test_data,TEST_FILE_NUMBER);
     free(target_y);// free train_target and have it for testing, should we redeclare????!!!
 
 
@@ -943,6 +967,7 @@ int main(void)
             /* for all trees */
             current_node =  root;
             level=1;
+            // printf("%f\n",feat_thres[fi][current_node][1]);
             while(!(int)feat_thres[fi][current_node][2])
             {
                 if(test_data[i][(int)feat_thres[fi][current_node][1]] > feat_thres[fi][current_node][0])
@@ -960,9 +985,11 @@ int main(void)
 
         }
         prediction_temp = prediction_temp/num_of_trees;
+        printf("Pred is: %f True is: %f \n",prediction_temp,test_data[i][target_feature]);
         avg_mse += pow(test_data[i][target_feature] - prediction_temp,2);
     }
     avg_mse = avg_mse/TOTAL_NUM_ROW;
     
     printf("The avg MSE is : %f", avg_mse);
+
 }
