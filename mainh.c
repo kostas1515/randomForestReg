@@ -6,6 +6,7 @@
 #include <time.h>
 #include <math.h>
 #define FILE_NUMBER 2//default 52
+#define TEST_FILE_NUMBER 1
 #include <limits.h> 
 
 
@@ -88,8 +89,8 @@ int* getNumbRowsColumns(char *path, char **csvs){
     // FILE *fp = fopen(de->d_name, "r");
     closedir(dr);
 
-    FILE *fp = fopen(temp_path, "r"); // FOR LINUX
-    // FILE *fp; //for WINDOWS 
+    // FILE *fp = fopen(temp_path, "r"); // FOR LINUX
+    FILE *fp; //for WINDOWS 
     char buf[3072]; // this is a buffer that contains the line from fgets
     int k=0;
     int col_num=0;
@@ -120,7 +121,7 @@ int* getNumbRowsColumns(char *path, char **csvs){
 
         TOTAL_NUM_ROW=TOTAL_NUM_ROW+row_num;
         row_num=0;
-        // fclose(fp);
+        fclose(fp);
         
     }
 
@@ -614,9 +615,9 @@ void printMatrF(int rows, int cols, float **Matr)
 int main(void) 
 {
 
-    char path[100]="D:/Work/PhD/HartreeTraining/Hartree Assignment/data/";// this path should be the folder of data
+    // char path[100]="D:/Work/PhD/HartreeTraining/Hartree Assignment/data/";// this path should be the folder of data
     // char path[100]="/home/konsa/Downloads/hartree_data/";
-    // char path[100]="C:\\Users\\theot\\eclipse-workspaceC\\VSC\\Hartree\\Hartree_Data\\";
+    char path[100]="C:\\Users\\theot\\eclipse-workspaceC\\VSC\\Hartree\\Hartree_Data\\";
     int* num_rows_columns = malloc(2*sizeof(int)); //holds number of rows and columns
     
     char **csvs = malloc(FILE_NUMBER * sizeof(char *));
@@ -654,8 +655,8 @@ int main(void)
     //########################     Some Initialisation    ###############################################
     int target_feature = 193; //Target feautr is the population in 193th col
     int tree_size=round(sqrt(num_columns))+1; // The number of feature that the root of each tree gets
-    int num_of_trees=10;  //The number of trees
-    int depth = 8;
+    int num_of_trees=5;  //The number of trees
+    int depth = 4;
     int no_Of_nodes = (int)pow(2,depth)-1;
     struct Stack* node_stack=createStack(no_Of_nodes);
     struct Stack* level_stuck=createStack(no_Of_nodes);
@@ -806,7 +807,7 @@ int main(void)
 
             feat_thres[fi][current_root][0]=forest[fi][current_root][utilities_matrix[fi][3]][utilities_matrix[fi][2]];
             printf("the numeric threshold is %f\n",feat_thres[fi][current_root][0]);
-            feat_thres[fi][current_root][1]=utilities_matrix[fi][3];
+            feat_thres[fi][current_root][1]= bofArrays[fi][utilities_matrix[fi][3]];
             printAr1(utilities_matrix[fi],6);
             // printAr1(utilities_matrix[fi],6);
 
@@ -892,4 +893,76 @@ int main(void)
     }
     //printMatr(num_of_trees,6,utilities_matrix);
 
+    // path[100]="/home/konsa/Downloads/hartree_data/test_sample/";
+    char path2[100] = "C:\\Users\\theot\\eclipse-workspaceC\\VSC\\Hartree\\Hartree_Test\\";
+
+    char **test_csvs = malloc(TEST_FILE_NUMBER * sizeof(char *));
+    for (int i=0; i < TEST_FILE_NUMBER; i++)
+        test_csvs[i] = malloc((50) *sizeof(float));
+
+    //Go trough all files to check how many rows and columns of data we'll need to allocate
+    num_rows_columns = getNumbRowsColumns(path2, test_csvs);
+    total_num_rows = num_rows_columns[0];
+    num_columns = num_rows_columns[1];
+
+    // ############################### READING THE DATA FROM CSV FILES ###########################################
+
+
+    TOTAL_NUM_ROW=total_num_rows-1;
+    printf("Total number of test_rows is:%d\n",TOTAL_NUM_ROW );
+    printf("Total number of test_columns is:%d\n",num_columns );
+
+
+    //################### main data procedure#################
+
+    //initialize feature_name list
+    float **test_data = malloc(TOTAL_NUM_ROW * sizeof(float *)); //initialize data 2d array
+    for (int i=0; i < TOTAL_NUM_ROW; i++)
+        test_data[i] = malloc((num_columns) * sizeof(float));
+
+
+
+    get_data(path, num_columns, test_csvs, test_data);
+    free(target_y);// free train_target and have it for testing, should we redeclare????!!!
+
+
+    float prediction_temp=0;
+
+    float avg_mse = 0; 
+
+    int current_node=root;
+
+    normalise(test_data,TOTAL_NUM_ROW,num_columns);
+
+    for (int i = 0; i < TOTAL_NUM_ROW; ++i)
+    {
+        /* for all data points */
+        prediction_temp=0;
+        for (int fi = 0; fi < num_of_trees; ++fi)
+        {
+            /* for all trees */
+            current_node =  root;
+            level=1;
+            while(!(int)feat_thres[fi][current_node][2])
+            {
+                if(test_data[i][(int)feat_thres[fi][current_node][1]] > feat_thres[fi][current_node][0])
+                {
+                    current_node += (int)pow(2,depth-level-1);
+                    level++;
+                }
+                else
+                {
+                    current_node -= (int)pow(2,depth-level-1);
+                    level++;
+                }
+            }
+            prediction_temp += feat_thres[fi][current_node][0];
+
+        }
+        prediction_temp = prediction_temp/num_of_trees;
+        avg_mse += pow(test_data[i][target_feature] - prediction_temp,2);
+    }
+    avg_mse = avg_mse/TOTAL_NUM_ROW;
+    
+    printf("The avg MSE is : %f", avg_mse);
 }
