@@ -11,7 +11,6 @@
 #include <omp.h>
 
 
-
 struct Stack { 
     int top; 
     unsigned capacity; 
@@ -149,7 +148,7 @@ void getrow(char* line,char feature_names[][50])
     }
 }
 
-void fix_id(char *array)
+void fix_id(char *array) //@@
 {
 //removes the E from area_id and stores it to data as float
     for (int i = 0; i < NELEMS(array); ++i)
@@ -359,13 +358,7 @@ void get_best_threshold(int *size_matrix, float **parent)
     }
     avgTarget=avgTarget/counter;
     // printf("avg target is %f\n",avgTarget );
-
-    int m=0;
-    int k=0;
-
-    #pragma omp parallel private(m, k, current_threshold, counter, sumLeft,sumRight,se) shared(avgTarget,parent_i,parent_j,min_se,best_threshold,best_descriptor)
-    {
-    #pragma omp for
+    
     for(int m=0;m<parent_j-1;m++)
     {
         // printf("mse is %f\n",min_se );
@@ -400,18 +393,14 @@ void get_best_threshold(int *size_matrix, float **parent)
             }
 
             se=(sumRight+sumLeft)/2;
-            #pragma omp critical
+            if(se<min_se)
             {
-                if(se<min_se)
-                {
-                    min_se=se;
-                    best_threshold = k;
-                    best_descriptor=m;
-                    // printf("the best is %d\n",parent_i-counter );
-                }
+                min_se=se;
+                best_threshold = k;
+                best_descriptor=m;
+                // printf("the best is %d\n",parent_i-counter );
             }
         }
-    }
     }
 
     size_matrix[3]=best_threshold;
@@ -424,39 +413,31 @@ void get_best_threshold(int *size_matrix, float **parent)
 **/
 void normalise(float **matrix, int rows, int cols)
 {
-    int j;
-    int i;
-    float mean =0;
-    float sdev=0;
-    #pragma omp parallel private(j,i,mean,sdev) shared(rows,matrix)
+    for(int j=0; j<cols; ++j)
     {
-        #pragma omp for
-        for(j=0; j<cols; ++j)
+        float mean =0;
+        for(int i=0; i<rows; ++i)
         {
-            mean =0;
-            for(i=0; i<rows; ++i)
-            {
-                mean += matrix[i][j];
-            }
-            mean = mean/rows;
+            mean += matrix[i][j];
+        }
+        mean = mean/rows;
 
-            sdev=0;
-            for(i=0; i<rows; i++)
-            {
-                sdev += pow((matrix[i][j]-mean),2);
-            }
-            sdev = sqrt(sdev/(rows-1));
+        float sdev=0;
+        for(int i=0; i<rows; i++)
+        {
+            sdev += pow((matrix[i][j]-mean),2);
+        }
+        sdev = sqrt(sdev/(rows-1));
 
-            if(sdev==0)
-            {
-                //printf("%f",mean);
-                sdev=1; 
-            }
+        if(sdev==0)
+        {
+            //printf("%f",mean);
+            sdev=1; 
+        }
 
-            for(int i=0; i<rows; i++)
-            {
-                matrix[i][j]=(matrix[i][j]-mean)/sdev;
-            }
+        for(int i=0; i<rows; i++)
+        {
+            matrix[i][j]=(matrix[i][j]-mean)/sdev;
         }
     }
 }
@@ -578,19 +559,14 @@ void createBOF(int cols, int Nfeatures,int target, int seed, int *bof)
 void fillBof(int rows, int bigCols, int Nfeatures,float **bigMatr, float **smallMatr,int *bofAr,int target,int seed)
 {
     createBOF(bigCols,Nfeatures,target,seed,bofAr);
-    int i,j;
-    #pragma omp parallel private(i,j) shared(smallMatr,rows,Nfeatures,bigMatr)
-    {
-        #pragma omp for collapse(2)
-        for(i=0; i<rows; i++)
-        {
-            for(j=0; j<Nfeatures; j++)
-            {
-                smallMatr[i][j] = bigMatr[i][bofAr[j]];
-            }
-        } 
-    }
 
+    for(int i=0; i<rows; i++)
+    {
+        for(int j=0; j<Nfeatures; j++)
+        {
+            smallMatr[i][j] = bigMatr[i][bofAr[j]];
+        }
+    } 
 }
 
 /**
@@ -599,16 +575,10 @@ void fillBof(int rows, int bigCols, int Nfeatures,float **bigMatr, float **small
 **/
 void get_target(int length,int col_name,float **data,float *y)
 {
-    int i;
-    #pragma omp parallel private(i) shared(y,data,col_name,length)
+    for(int i=0; i<length; i++)
     {
-        #pragma omp for
-        for(i=0; i<length; i++)
-        {
-            y[i]=data[i][col_name];
-        }
+        y[i]=data[i][col_name];
     }
-
 }
 
 // A function to print a matrix with integers
@@ -642,7 +612,8 @@ void printMatrF(int rows, int cols, float **Matr)
 
 int main(void) 
 {
-
+    time_t seconds_start, seconds_end;
+    seconds_start = time(NULL);
     // char path[100]="D:/Work/PhD/HartreeTraining/Hartree Assignment/data/";// this path should be the folder of data
     char path[100]="/home/konsa/Downloads/hartree_data/sample/";
     // char path[100]="C:\\Users\\theot\\eclipse-workspaceC\\VSC\\Hartree\\Hartree_Data\\";
@@ -651,7 +622,7 @@ int main(void)
     char **csvs = malloc(FILE_NUMBER * sizeof(char *));
     for (int i=0; i < FILE_NUMBER; i++)
         csvs[i] = malloc((50)*sizeof(float));
-
+    
     //Go trough all files to check how many rows and columns of data we'll need to allocate
     getNumbRowsColumns(path, csvs,num_rows_columns,FILE_NUMBER);
     int total_num_rows = num_rows_columns[0];
@@ -683,8 +654,8 @@ int main(void)
     //########################     Some Initialisation    ###############################################
     int target_feature = 193; //Target feautr is the population in 193th col
     int tree_size=round(sqrt(num_columns))+1; // The number of feature that the root of each tree gets
-    int num_of_trees=10;  //The number of trees
-    int depth = 8;
+    int num_of_trees=5;  //The number of trees
+    int depth = 4;
     int no_Of_nodes = (int)pow(2,depth)-1;
     struct Stack* node_stack=createStack(no_Of_nodes);
     struct Stack* level_stuck=createStack(no_Of_nodes);
@@ -788,7 +759,7 @@ int main(void)
             bofArrays[i][j] = bofArray[j];
         }
     }
-    // printMatr(num_of_trees,tree_size,bofArrays);
+    printMatr(num_of_trees,tree_size,bofArrays);
     // feat_thres is a 3-d matrix [num_of_tress][num_of_nodes][best_feature,float threshold]
     float ***feat_thres = malloc(num_of_trees * sizeof(float **));
     for (int j = 0; j < num_of_trees; ++j)
@@ -1023,9 +994,7 @@ int main(void)
     
     printf("The avg MSE is : %f", avg_mse);
 
-}
+    seconds_end = time(NULL);
+    printf("\nTotal execution time: %ld", seconds_end - seconds_start);
 
-//to do check nan values in prediction
-// check the bof array, it should not have the target column multiple times only in the last col
-// why prediction is way off?
-// parrallel
+}
